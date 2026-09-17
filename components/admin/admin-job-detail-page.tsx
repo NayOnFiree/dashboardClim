@@ -1,0 +1,28 @@
+"use client";
+
+import { AlertTriangle, ArrowLeft, Bell, Camera, CheckCircle2, ChevronDown, ChevronRight, Clock3, Euro, MapPin, Menu, Phone, Snowflake, UserRound, Wrench } from "lucide-react";
+import Link from "next/link";
+import { useState } from "react";
+import { signOut } from "@/app/login/actions";
+import { AdminSidebar } from "@/components/admin/admin-jobs-page";
+import type { AdminJobDetail } from "@/lib/admin-jobs-data";
+
+const actionLabels: Record<string, string> = {
+  "job.created": "Intervention créée", "precheck.completed": "Pré-contrôle terminé", "photo.uploaded": "Photo ajoutée",
+  "checklist.completed": "Checklist terminée", "final_check.completed": "Test final terminé", "job.completed": "Intervention clôturée",
+};
+
+export function AdminJobDetailPage({ job }: { job: AdminJobDetail }) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  return <div className="app-shell"><AdminSidebar open={sidebarOpen} close={() => setSidebarOpen(false)} /><main className="main"><header className="topbar"><button className="menu-button" onClick={() => setSidebarOpen(true)} aria-label="Ouvrir le menu"><Menu size={21} /></button><div className="breadcrumbs"><Link href="/admin/jobs">Interventions</Link><ChevronRight size={14} /><strong>{job.id}</strong></div><div className="top-actions"><button className="icon-button" aria-label="Notifications"><Bell size={19} /></button><form action={signOut}><button className="user-menu"><span className="user-avatar">EM</span><span><strong>Emma Martin</strong><small>Administratrice</small></span><ChevronDown size={15} /></button></form></div></header><div className="content admin-detail-content">
+    <Link className="admin-back-link" href="/admin/jobs"><ArrowLeft size={15} />Toutes les interventions</Link>
+    <section className="admin-detail-heading"><div><span>{job.id}</span><h1>{job.customer}</h1><p><MapPin size={14} />{job.address}</p></div><div><span className={`status status-${job.status.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replaceAll(" ", "-").replaceAll("·", "")}`}>{job.status}</span><button className="secondary-button">Modifier</button></div></section>
+    <section className="admin-detail-summary"><div><Clock3 size={18} /><span><small>Créneau</small><strong>{job.scheduledDate} · {job.startTime}–{job.endTime}</strong></span></div><div><UserRound size={18} /><span><small>Technicien</small><strong>{job.technician}</strong></span></div><div><Wrench size={18} /><span><small>Prestation</small><strong>{job.service}</strong></span></div><div><Euro size={18} /><span><small>Montant</small><strong>{(job.priceCents / 100).toLocaleString("fr-FR", { style: "currency", currency: "EUR" })} · {job.payment}</strong></span></div></section>
+    <div className="admin-detail-grid"><div className="admin-detail-main">
+      <section className="panel admin-detail-panel"><header><div><span>Équipements</span><h2>Progression par unité</h2></div><strong>{job.equipment.length} split{job.equipment.length > 1 ? "s" : ""}</strong></header><div className="admin-equipment-detail-list">{job.equipment.map((equipment) => <article key={equipment.id}><div className="admin-equipment-icon"><Snowflake size={19} /></div><div className="admin-equipment-name"><span>{equipment.publicCode}</span><h3>{equipment.room}</h3><p>{equipment.brand} {equipment.model}</p></div><div className="admin-proof-grid"><span><Camera size={14} /><strong>{equipment.beforePhotos}</strong><small>avant</small></span><span><Camera size={14} /><strong>{equipment.afterPhotos}</strong><small>après</small></span><span><CheckCircle2 size={14} /><strong>{equipment.checklistResponses}</strong><small>opérations</small></span><span className={equipment.finalPassed === false ? "failed" : ""}><CheckCircle2 size={14} /><strong>{equipment.finalPassed === undefined ? "—" : equipment.finalPassed ? "OK" : "Échec"}</strong><small>test final</small></span></div>{equipment.product && <small className="admin-product-used">Produit : {equipment.product}</small>}</article>)}</div></section>
+      <section className="panel admin-detail-panel"><header><div><span>Incidents</span><h2>Événements signalés</h2></div></header>{job.incidents.length ? <div className="admin-incident-list">{job.incidents.map((incident) => <article key={incident.id}><AlertTriangle size={18} /><div><span>{incident.publicCode} · {incident.createdAt}</span><strong>{incident.description}</strong></div><em>{incident.severity} · {incident.status}</em></article>)}</div> : <div className="admin-empty-inline"><CheckCircle2 size={22} /><strong>Aucun incident déclaré</strong></div>}</section>
+    </div><aside className="admin-detail-side"><section className="panel admin-detail-panel"><header><div><span>Client</span><h2>Coordonnées et accès</h2></div></header><dl className="admin-contact-list"><div><dt><UserRound size={14} />Client</dt><dd>{job.customer}</dd></div><div><dt><Phone size={14} />Téléphone</dt><dd>{job.phone ?? "Non renseigné"}</dd></div><div><dt><MapPin size={14} />Adresse</dt><dd>{job.address}</dd></div>{job.accessNotes && <div><dt>Instructions</dt><dd>{job.accessNotes}</dd></div>}</dl></section>
+      <section className="panel admin-detail-panel"><header><div><span>Traçabilité</span><h2>Historique</h2></div></header>{job.timeline.length ? <ol className="admin-timeline">{job.timeline.map((event, index) => <li key={`${event.action}-${event.createdAt}-${index}`}><i /><div><strong>{actionLabels[event.action] ?? event.action}</strong><span>{event.actor}</span><time>{event.createdAt}</time></div></li>)}</ol> : <div className="admin-empty-inline"><Clock3 size={22} /><strong>Aucun événement enregistré</strong></div>}</section>
+    </aside></div>
+  </div></main></div>;
+}

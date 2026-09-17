@@ -1,0 +1,61 @@
+"use client";
+
+import { AlertTriangle, Bell, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, FileCheck2, Grid2X2, Headphones, House, KeyRound, Menu, Plus, Search, Settings2, ShieldCheck, Snowflake, Users, Wrench, X } from "lucide-react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { FormEvent, useMemo, useState } from "react";
+import { signOut } from "@/app/login/actions";
+import type { AdminJobListItem, AdminSiteOption, AdminTechnicianOption } from "@/lib/admin-jobs-data";
+
+const navGroups = [
+  { label: "Pilotage", items: [{ label: "Vue d’ensemble", icon: Grid2X2, href: "/admin/dashboard" }, { label: "Planning", icon: CalendarDays, href: "/admin/calendar" }, { label: "Interventions", icon: Wrench, href: "/admin/jobs" }, { label: "Incidents", icon: AlertTriangle, href: "/admin/incidents" }] },
+  { label: "Répertoire", items: [{ label: "Clients & sites", icon: House, href: "/admin/customers" }, { label: "Techniciens", icon: Users, href: "/admin/technicians" }, { label: "Équipements", icon: Snowflake, href: "/admin/equipment" }] },
+  { label: "Qualité", items: [{ label: "Contrôle qualité", icon: ShieldCheck, href: "/admin/quality" }, { label: "Produits & protocoles", icon: FileCheck2, href: "/admin/products" }] },
+  { label: "Système", items: [{ label: "Accès & sécurité", icon: KeyRound, href: "/admin/access" }, { label: "Intégrations", icon: Settings2, href: "/admin/integrations" }] },
+];
+const statuses = ["Toutes", "Planifiée", "En route", "Arrivée", "En cours", "Bloquée", "Terminée", "Annulée"];
+const slug = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replaceAll(" ", "-").replaceAll("·", "");
+
+export function AdminSidebar({ open, close }: { open: boolean; close: () => void }) {
+  const pathname = usePathname();
+  return <><button className={`sidebar-scrim ${open ? "is-open" : ""}`} onClick={close} aria-label="Fermer le menu" /><aside className={`sidebar ${open ? "is-open" : ""}`}><div className="brand"><div className="brand-mark"><Snowflake size={20} /></div><div><strong>Clim Pilot</strong><span>Operations</span></div><button className="mobile-close" onClick={close} aria-label="Fermer"><X size={20} /></button></div><nav className="nav">{navGroups.map((group) => <div className="nav-group" key={group.label}><span className="nav-label">{group.label}</span>{group.items.map((item) => <Link className={`nav-item ${pathname === item.href || pathname.startsWith(`${item.href}/`) || (item.href === "/admin/customers" && pathname === "/admin/sites") ? "active" : ""}`} href={item.href} onClick={close} key={item.href}><item.icon size={18} /><span>{item.label}</span></Link>)}</div>)}</nav><div className="sidebar-foot"><button className="support-link"><Headphones size={18} />Centre d’aide<ChevronRight size={16} /></button><div className="workspace-switcher"><span className="workspace-avatar">CA</span><span><strong>Clim Air Services</strong><small>Espace principal</small></span></div></div></aside></>;
+}
+
+function CreateJobModal({ sites, technicians, close, created }: { sites: AdminSiteOption[]; technicians: AdminTechnicianOption[]; close: () => void; created: (id: string) => void }) {
+  const [siteId, setSiteId] = useState(sites[0]?.id ?? ""); const [saving, setSaving] = useState(false); const [error, setError] = useState("");
+  const site = sites.find((entry) => entry.id === siteId);
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault(); setSaving(true); setError("");
+    const form = new FormData(event.currentTarget); const date = String(form.get("date")); const start = String(form.get("start")); const end = String(form.get("end"));
+    try {
+      const response = await fetch("/api/admin/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+        siteId, technicianId: form.get("technicianId") || null, equipmentIds: form.getAll("equipmentId"),
+        scheduledStart: new Date(`${date}T${start}`).toISOString(), scheduledEnd: new Date(`${date}T${end}`).toISOString(),
+        serviceType: form.get("serviceType"), priceCents: Math.round(Number(form.get("price")) * 100), notes: form.get("notes"),
+      }) });
+      const result = await response.json() as { id?: string; error?: string };
+      if (!response.ok || !result.id) throw new Error(result.error ?? "Création impossible.");
+      created(result.id);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Création impossible."); setSaving(false); }
+  };
+  return <div className="modal-layer"><button className="modal-backdrop" onClick={close} aria-label="Fermer" /><form className="modal admin-job-modal" onSubmit={submit}><div className="modal-head"><div><span>Nouvelle mission</span><h2>Planifier une intervention</h2></div><button type="button" className="icon-button" onClick={close}><X size={20} /></button></div><div className="form-grid">
+    <label className="wide">Client et site<select name="siteId" value={siteId} onChange={(event) => setSiteId(event.target.value)} required>{sites.map((entry) => <option value={entry.id} key={entry.id}>{entry.customer} · {entry.label} · {entry.address}</option>)}</select></label>
+    <label>Technicien<select name="technicianId" defaultValue=""><option value="">Non attribuée</option>{technicians.map((entry) => <option value={entry.id} key={entry.id}>{entry.name}{entry.role === "subcontractor" ? " · Sous-traitant" : ""}</option>)}</select></label>
+    <label>Prestation<select name="serviceType" defaultValue="maintenance"><option value="maintenance">Nettoyage standard</option><option value="deep_clean">Nettoyage approfondi</option></select></label>
+    <label>Date<input type="date" name="date" required defaultValue="2026-09-18" /></label><label>Début<input type="time" name="start" required defaultValue="09:00" /></label><label>Fin<input type="time" name="end" required defaultValue="10:30" /></label><label>Prix TTC (€)<input type="number" name="price" min="0" step="0.01" required defaultValue="99" /></label>
+    <fieldset className="equipment-picker wide"><legend>Équipements à traiter</legend>{site?.equipment.length ? site.equipment.map((equipment, index) => <label key={equipment.id}><input type="checkbox" name="equipmentId" value={equipment.id} defaultChecked={index === 0} /><span><CheckCircle2 size={15} /></span>{equipment.label}</label>) : <p>Aucun équipement enregistré sur ce site.</p>}</fieldset>
+    <label className="wide">Notes terrain<textarea name="notes" rows={3} placeholder="Accès, stationnement, consignes particulières…" /></label>
+    {error && <div className="admin-form-error wide"><AlertTriangle size={16} />{error}</div>}
+  </div><div className="modal-actions"><button type="button" className="secondary-button" onClick={close}>Annuler</button><button className="primary-button" type="submit" disabled={saving || !site?.equipment.length}>{saving ? "Création…" : "Créer et planifier"}</button></div></form></div>;
+}
+
+export function AdminJobsPage({ jobs, sites, technicians }: { jobs: AdminJobListItem[]; sites: AdminSiteOption[]; technicians: AdminTechnicianOption[] }) {
+  const router = useRouter(); const [sidebarOpen, setSidebarOpen] = useState(false); const [createOpen, setCreateOpen] = useState(false); const [query, setQuery] = useState(""); const [status, setStatus] = useState("Toutes"); const [technicianId, setTechnicianId] = useState("all"); const [toast, setToast] = useState("");
+  const filtered = useMemo(() => jobs.filter((job) => (status === "Toutes" || job.status.startsWith(status)) && (technicianId === "all" || job.technicianId === technicianId) && (!query.trim() || [job.id, job.customer, job.city, job.technician].some((value) => value.toLowerCase().includes(query.toLowerCase().trim())))), [jobs, query, status, technicianId]);
+  const created = (id: string) => { setCreateOpen(false); setToast(`${id} a été créée et ajoutée au planning.`); router.refresh(); window.setTimeout(() => setToast(""), 3500); };
+  return <div className="app-shell"><AdminSidebar open={sidebarOpen} close={() => setSidebarOpen(false)} /><main className="main"><header className="topbar"><button className="menu-button" onClick={() => setSidebarOpen(true)} aria-label="Ouvrir le menu"><Menu size={21} /></button><div className="breadcrumbs"><span>Operations</span><ChevronRight size={14} /><strong>Interventions</strong></div><div className="top-actions"><button className="icon-button" aria-label="Notifications"><Bell size={19} /></button><form action={signOut}><button className="user-menu"><span className="user-avatar">EM</span><span><strong>Emma Martin</strong><small>Administratrice</small></span><ChevronDown size={15} /></button></form></div></header><div className="content admin-jobs-content">
+    <section className="page-heading"><div><p>Pilotage opérationnel</p><h1>Interventions <span>— planifier, attribuer et suivre.</span></h1></div><button className="primary-button" onClick={() => setCreateOpen(true)}><Plus size={17} />Nouvelle intervention</button></section>
+    <section className="admin-jobs-stats"><div><span>Total</span><strong>{jobs.length}</strong></div><div><span>À venir</span><strong>{jobs.filter((job) => ["Planifiée", "En route"].includes(job.status)).length}</strong></div><div><span>En cours</span><strong>{jobs.filter((job) => ["Arrivée", "En cours", "Bloquée"].includes(job.status)).length}</strong></div><div><span>Incidents ouverts</span><strong>{jobs.reduce((sum, job) => sum + job.incidentCount, 0)}</strong></div></section>
+    <section className="panel admin-jobs-panel"><div className="admin-jobs-toolbar"><div className="mini-search admin-job-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Client, ville ou numéro…" /></div><select value={status} onChange={(event) => setStatus(event.target.value)}>{statuses.map((entry) => <option key={entry}>{entry}</option>)}</select><select value={technicianId} onChange={(event) => setTechnicianId(event.target.value)}><option value="all">Tous les techniciens</option>{technicians.map((entry) => <option value={entry.id} key={entry.id}>{entry.name}</option>)}</select></div><div className="table-wrap"><table className="admin-jobs-table"><thead><tr><th>Date et heure</th><th>Client et site</th><th>Prestation</th><th>Technicien</th><th>Équip.</th><th>Statut</th><th>Paiement</th><th aria-label="Ouvrir" /></tr></thead><tbody>{filtered.map((job) => <tr key={job.id}><td><strong>{new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "short" }).format(new Date(`${job.scheduledDate}T12:00:00`))}</strong><small>{job.startTime} – {job.endTime}</small></td><td><strong>{job.customer}</strong><small>{job.id} · {job.city}</small>{job.incidentCount > 0 && <span className="row-warning"><AlertTriangle size={12} />{job.incidentCount} incident{job.incidentCount > 1 ? "s" : ""}</span>}</td><td><strong>{job.service}</strong><small>{(job.priceCents / 100).toLocaleString("fr-FR", { style: "currency", currency: "EUR" })}</small></td><td><div className="technician"><span className="mini-avatar">{job.technician.split(" ").map((part) => part[0]).join("").slice(0, 2)}</span><strong>{job.technician}</strong></div></td><td><span className="equipment-count">{job.equipmentCount}</span></td><td><span className={`status status-${slug(job.status)}`}>{job.status}</span></td><td><span className={`payment payment-${slug(job.payment)}`}>{job.payment}</span></td><td><Link className="row-action" href={`/admin/jobs/${job.id}`} aria-label={`Ouvrir ${job.id}`}><ChevronRight size={17} /></Link></td></tr>)}</tbody></table>{!filtered.length && <div className="empty-state"><Search size={24} /><strong>Aucune intervention trouvée</strong><p>Modifiez la recherche ou les filtres.</p></div>}</div><div className="table-footer"><span>{filtered.length} résultat{filtered.length > 1 ? "s" : ""}</span><span>Données PostgreSQL en temps réel</span></div></section>
+  </div></main>{createOpen && <CreateJobModal sites={sites} technicians={technicians} close={() => setCreateOpen(false)} created={created} />}{toast && <div className="toast"><CheckCircle2 size={18} />{toast}</div>}</div>;
+}

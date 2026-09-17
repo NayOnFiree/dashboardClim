@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Next.js build output
+.next/
+out/
+
+# Local environment and runtime files
+.env*
+!.env.example
+*.log
+*.tsbuildinfo
+storage/
+
+# Local document review artifacts
+.codex-doc-review/
+
+# Operating system files
+.DS_Store
+Thumbs.db
